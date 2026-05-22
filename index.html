@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>血压心跳记录追踪器</title>
+<title>根根血压心跳记录器</title>
 <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
@@ -14,14 +14,6 @@
     --border: #e8e8ec;
     --primary: #3498db;
     --danger: #e74c3c;
-    --morning: #f39c12;
-    --evening: #2c3e50;
-    --sys-morning: #ff6b6b;
-    --sys-evening: #3498db;
-    --dia-morning: #ff6b6b88;
-    --dia-evening: #3498db88;
-    --hr-morning: #2ecc71;
-    --hr-evening: #9b59b6;
     --radius: 12px;
     --shadow: 0 2px 12px rgba(0,0,0,0.06);
   }
@@ -35,7 +27,6 @@
   }
   .container { max-width: 700px; margin: 0 auto; }
 
-  /* Header */
   header {
     text-align: center;
     padding: 20px 0 16px;
@@ -43,7 +34,6 @@
   header h1 { font-size: 1.5rem; font-weight: 700; }
   header p { color: var(--sub); font-size: 0.9rem; margin-top: 2px; }
 
-  /* Card */
   .card {
     background: var(--card);
     border-radius: var(--radius);
@@ -60,7 +50,6 @@
   }
   .card h2 .icon { font-size: 1.2rem; }
 
-  /* Form */
   .form-row {
     display: flex;
     gap: 10px;
@@ -104,12 +93,13 @@
     cursor: pointer;
     transition: all 0.2s;
   }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-primary { background: var(--primary); color: #fff; }
-  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.9; }
   .btn-outline { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
-  .btn-outline:hover { background: #f0f7ff; }
+  .btn-outline:hover:not(:disabled) { background: #f0f7ff; }
   .btn-danger { background: none; color: var(--danger); border: 1.5px solid var(--danger); }
-  .btn-danger:hover { background: #fff5f5; }
+  .btn-danger:hover:not(:disabled) { background: #fff5f5; }
   .btn-sm { padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; }
 
   .form-actions {
@@ -119,7 +109,6 @@
     margin-top: 4px;
   }
 
-  /* Tabs */
   .tabs {
     display: flex;
     gap: 0;
@@ -144,7 +133,6 @@
   .tab-content { display: none; }
   .tab-content.active { display: block; }
 
-  /* Chart wrapper */
   .chart-wrapper {
     position: relative;
     width: 100%;
@@ -153,7 +141,6 @@
   }
   .chart-wrapper canvas { width: 100% !important; }
 
-  /* Legend info */
   .chart-legend {
     display: flex;
     gap: 16px;
@@ -170,7 +157,6 @@
     border-radius: 50%;
   }
 
-  /* Table */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -196,19 +182,17 @@
 
   .table-actions { display: flex; gap: 4px; justify-content: center; }
 
-  /* Toolbar */
   .toolbar {
     display: flex;
     gap: 8px;
     margin-bottom: 12px;
     flex-wrap: wrap;
+    align-items: center;
   }
 
-  /* Empty state */
   .empty { text-align: center; padding: 40px 20px; color: var(--sub); }
   .empty .icon { font-size: 2.5rem; margin-bottom: 8px; }
 
-  /* Toast */
   .toast {
     position: fixed;
     top: 20px;
@@ -226,6 +210,28 @@
   }
   .toast.show { opacity: 1; }
 
+  .sync-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--sub);
+  }
+  .sync-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #bdc3c7;
+  }
+  .sync-dot.synced { background: #2ecc71; }
+  .sync-dot.syncing { background: #f39c12; animation: pulse 0.6s infinite; }
+  .sync-dot.error { background: #e74c3c; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
   @media (max-width: 480px) {
     body { padding: 8px; }
     .card { padding: 14px; }
@@ -241,10 +247,9 @@
 <div class="container">
   <header>
     <h1>🩺 根根血压心跳记录器</h1>
-    <p>记录早晚血压/心跳 · 趋势一目了然</p>
+    <p>记录早晚血压/心跳 · 趋势一目了然 · 云端共享</p>
   </header>
 
-  <!-- Entry Form -->
   <div class="card" id="form-card">
     <h2><span class="icon">📝</span> 录入数据</h2>
     <form id="record-form" autocomplete="off">
@@ -277,13 +282,16 @@
       </div>
       <input type="hidden" id="input-edit-id">
       <div class="form-actions">
+        <span class="sync-status">
+          <span class="sync-dot" id="sync-dot"></span>
+          <span id="sync-text">等待加载</span>
+        </span>
         <button type="button" class="btn btn-outline btn-sm" id="btn-cancel-edit" style="display:none">取消编辑</button>
         <button type="submit" class="btn btn-primary" id="btn-submit">💾 保存记录</button>
       </div>
     </form>
   </div>
 
-  <!-- Charts -->
   <div class="card">
     <div class="tabs">
       <button class="tab-btn active" data-tab="tab-week">📊 一周趋势</button>
@@ -291,7 +299,6 @@
       <button class="tab-btn" data-tab="tab-list">📋 历史记录</button>
     </div>
 
-    <!-- Week Chart -->
     <div class="tab-content active" id="tab-week">
       <div class="chart-wrapper"><canvas id="chart-week"></canvas></div>
       <div class="chart-legend">
@@ -304,7 +311,6 @@
       </div>
     </div>
 
-    <!-- Month Chart -->
     <div class="tab-content" id="tab-month">
       <div class="chart-wrapper"><canvas id="chart-month"></canvas></div>
       <div class="chart-legend">
@@ -317,9 +323,9 @@
       </div>
     </div>
 
-    <!-- History List -->
     <div class="tab-content" id="tab-list">
       <div class="toolbar">
+        <button class="btn btn-outline btn-sm" id="btn-refresh">🔄 刷新数据</button>
         <button class="btn btn-outline btn-sm" id="btn-export">📥 导出备份</button>
         <button class="btn btn-outline btn-sm" id="btn-import">📤 导入数据</button>
         <input type="file" id="import-file" accept=".json" style="display:none">
@@ -332,22 +338,91 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ============ Storage ============
-const STORAGE_KEY = 'health-tracker-records';
+// ============ Supabase config ============
+const SUPABASE_URL = 'https://nhddgnfxjkppobrwrfob.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PCTokCrrtqrXGg5EzBck0A_wg3ZKoXc';
 
-function loadRecords() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+const apiHeaders = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_KEY,
+  'Content-Type': 'application/json',
+};
+
+// ============ API helpers ============
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: apiHeaders,
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`API error ${res.status}: ${err}`);
+  }
+  return res;
 }
 
-function saveRecords(records) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+async function loadRecords() {
+  const res = await apiFetch('records?select=*&order=date.desc');
+  const data = await res.json();
+  // Normalize field names (snake_case from PG -> camelCase for UI)
+  return data.map(r => ({
+    id: r.id,
+    date: r.date,
+    period: r.period,
+    systolic: r.systolic,
+    diastolic: r.diastolic,
+    heartRate: r.heart_rate,
+    timestamp: new Date(r.created_at).getTime(),
+  }));
+}
+
+async function saveRecord(record) {
+  await apiFetch('records', {
+    method: 'POST',
+    body: JSON.stringify({
+      date: record.date,
+      period: record.period,
+      systolic: record.systolic,
+      diastolic: record.diastolic,
+      heart_rate: record.heartRate,
+    }),
+    headers: { ...apiHeaders, 'Prefer': 'return=representation' },
+  });
+}
+
+async function updateRecord(record) {
+  await apiFetch(`records?id=eq.${record.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      date: record.date,
+      period: record.period,
+      systolic: record.systolic,
+      diastolic: record.diastolic,
+      heart_rate: record.heartRate,
+    }),
+  });
+}
+
+async function deleteRecordApi(id) {
+  await apiFetch(`records?id=eq.${id}`, { method: 'DELETE' });
+}
+
+async function importRecords(records) {
+  await apiFetch('records', {
+    method: 'POST',
+    body: JSON.stringify(records.map(r => ({
+      date: r.date,
+      period: r.period,
+      systolic: r.systolic,
+      diastolic: r.diastolic,
+      heart_rate: r.heartRate || r.heart_rate,
+    }))),
+    headers: { ...apiHeaders, 'Prefer': 'return=minimal' },
+  });
 }
 
 // ============ State ============
-let records = loadRecords();
+let records = [];
 let weekChart = null;
 let monthChart = null;
 
@@ -362,8 +437,9 @@ const inputEditId = document.getElementById('input-edit-id');
 const btnSubmit = document.getElementById('btn-submit');
 const btnCancelEdit = document.getElementById('btn-cancel-edit');
 const toast = document.getElementById('toast');
+const syncDot = document.getElementById('sync-dot');
+const syncText = document.getElementById('sync-text');
 
-// Set today as default
 inputDate.value = new Date().toISOString().split('T')[0];
 
 // ============ Toast ============
@@ -375,8 +451,39 @@ function showToast(msg) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
 }
 
+// ============ Sync status ============
+function setSyncStatus(status, msg) {
+  syncDot.className = 'sync-dot ' + status;
+  syncText.textContent = msg;
+}
+
+// ============ Auto-refresh (poll for new data) ============
+async function reloadFromCloud() {
+  try {
+    setSyncStatus('syncing', '同步中...');
+    records = await loadRecords();
+    setSyncStatus('synced', `已同步 (${records.length}条)`);
+    refreshAll();
+  } catch (err) {
+    console.error('加载失败:', err);
+    setSyncStatus('error', '离线(数据已缓存)');
+    // Fallback: try localStorage
+    const cached = localStorage.getItem('health-tracker-cache');
+    if (cached) {
+      records = JSON.parse(cached);
+      refreshAll();
+    }
+  }
+}
+
+function cacheLocal() {
+  try {
+    localStorage.setItem('health-tracker-cache', JSON.stringify(records));
+  } catch {}
+}
+
 // ============ Form handlers ============
-form.addEventListener('submit', (e) => {
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const date = inputDate.value;
   const period = inputPeriod.value;
@@ -389,34 +496,29 @@ form.addEventListener('submit', (e) => {
     return;
   }
 
-  const editId = inputEditId.value;
-  if (editId) {
-    // Update existing
-    const idx = records.findIndex(r => r.id === editId);
-    if (idx !== -1) {
-      records[idx] = { ...records[idx], date, period, systolic, diastolic, heartRate };
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = '⏳ 保存中...';
+
+  try {
+    const editId = inputEditId.value;
+    if (editId) {
+      await updateRecord({ id: editId, date, period, systolic, diastolic, heartRate });
+      showToast('记录已更新');
+    } else {
+      await saveRecord({ date, period, systolic, diastolic, heartRate });
+      showToast('记录已保存');
     }
-    inputEditId.value = '';
-    btnSubmit.textContent = '💾 保存记录';
-    btnCancelEdit.style.display = 'none';
-    showToast('记录已更新');
-  } else {
-    // Add new
-    records.push({
-      id: crypto.randomUUID(),
-      date,
-      period,
-      systolic,
-      diastolic,
-      heartRate,
-      timestamp: Date.now()
-    });
-    showToast('记录已保存');
+    await reloadFromCloud();
+    cacheLocal();
+    resetForm();
+  } catch (err) {
+    console.error('保存失败:', err);
+    showToast('保存失败，请检查网络');
   }
 
-  saveRecords(records);
-  resetForm();
-  refreshAll();
+  btnSubmit.disabled = false;
+  btnSubmit.textContent = '💾 保存记录';
+  inputEditId.value = '';
 });
 
 btnCancelEdit.addEventListener('click', resetForm);
@@ -447,12 +549,17 @@ function editRecord(id) {
   document.getElementById('form-card').scrollIntoView({ behavior: 'smooth' });
 }
 
-function deleteRecord(id) {
+async function deleteRecord(id) {
   if (!confirm('确定删除这条记录吗？')) return;
-  records = records.filter(r => r.id !== id);
-  saveRecords(records);
-  refreshAll();
-  showToast('记录已删除');
+  try {
+    await deleteRecordApi(id);
+    await reloadFromCloud();
+    cacheLocal();
+    showToast('记录已删除');
+  } catch (err) {
+    console.error('删除失败:', err);
+    showToast('删除失败，请检查网络');
+  }
 }
 
 // ============ Charts ============
@@ -466,7 +573,6 @@ function prepareChartData(days) {
     .filter(r => r.date >= cutoffStr && r.date <= now.toISOString().split('T')[0])
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Group by date
   const byDate = {};
   for (const r of filtered) {
     if (!byDate[r.date]) byDate[r.date] = {};
@@ -485,12 +591,7 @@ function prepareChartData(days) {
     return `${dt.getMonth() + 1}/${dt.getDate()}`;
   });
 
-  const sysMorning = [];
-  const sysEvening = [];
-  const diaMorning = [];
-  const diaEvening = [];
-  const hrMorning = [];
-  const hrEvening = [];
+  const sysMorning = [], sysEvening = [], diaMorning = [], diaEvening = [], hrMorning = [], hrEvening = [];
 
   for (const date of allDates) {
     const day = byDate[date] || {};
@@ -500,7 +601,6 @@ function prepareChartData(days) {
     sysMorning.push(m ? m.systolic : null);
     diaMorning.push(m ? m.diastolic : null);
     hrMorning.push(m ? m.heartRate : null);
-
     sysEvening.push(e ? e.systolic : null);
     diaEvening.push(e ? e.diastolic : null);
     hrEvening.push(e ? e.heartRate : null);
@@ -511,74 +611,12 @@ function prepareChartData(days) {
 
 function makeDatasets(data) {
   return [
-    {
-      label: '收缩压(早)',
-      data: data.sysMorning,
-      borderColor: '#ff6b6b',
-      backgroundColor: '#ff6b6b',
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-      yAxisID: 'y',
-    },
-    {
-      label: '收缩压(晚)',
-      data: data.sysEvening,
-      borderColor: '#3498db',
-      backgroundColor: '#3498db',
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-      yAxisID: 'y',
-    },
-    {
-      label: '舒张压(早)',
-      data: data.diaMorning,
-      borderColor: '#ff6b6b88',
-      backgroundColor: '#ff6b6b88',
-      borderDash: [5, 3],
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      yAxisID: 'y',
-    },
-    {
-      label: '舒张压(晚)',
-      data: data.diaEvening,
-      borderColor: '#3498db88',
-      backgroundColor: '#3498db88',
-      borderDash: [5, 3],
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      yAxisID: 'y',
-    },
-    {
-      label: '心跳(早)',
-      data: data.hrMorning,
-      borderColor: '#2ecc71',
-      backgroundColor: '#2ecc71',
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      yAxisID: 'y1',
-    },
-    {
-      label: '心跳(晚)',
-      data: data.hrEvening,
-      borderColor: '#9b59b6',
-      backgroundColor: '#9b59b6',
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      yAxisID: 'y1',
-    },
+    { label: '收缩压(早)', data: data.sysMorning, borderColor: '#ff6b6b', backgroundColor: '#ff6b6b', tension: 0.3, spanGaps: true, pointRadius: 4, pointHoverRadius: 6, yAxisID: 'y' },
+    { label: '收缩压(晚)', data: data.sysEvening, borderColor: '#3498db', backgroundColor: '#3498db', tension: 0.3, spanGaps: true, pointRadius: 4, pointHoverRadius: 6, yAxisID: 'y' },
+    { label: '舒张压(早)', data: data.diaMorning, borderColor: '#ff6b6b88', backgroundColor: '#ff6b6b88', borderDash: [5, 3], tension: 0.3, spanGaps: true, pointRadius: 3, pointHoverRadius: 5, yAxisID: 'y' },
+    { label: '舒张压(晚)', data: data.diaEvening, borderColor: '#3498db88', backgroundColor: '#3498db88', borderDash: [5, 3], tension: 0.3, spanGaps: true, pointRadius: 3, pointHoverRadius: 5, yAxisID: 'y' },
+    { label: '心跳(早)', data: data.hrMorning, borderColor: '#2ecc71', backgroundColor: '#2ecc71', tension: 0.3, spanGaps: true, pointRadius: 3, pointHoverRadius: 5, yAxisID: 'y1' },
+    { label: '心跳(晚)', data: data.hrEvening, borderColor: '#9b59b6', backgroundColor: '#9b59b6', tension: 0.3, spanGaps: true, pointRadius: 3, pointHoverRadius: 5, yAxisID: 'y1' },
   ];
 }
 
@@ -605,8 +643,7 @@ function chartOptions(title) {
         type: 'linear',
         position: 'left',
         title: { display: true, text: '血压 (mmHg)', font: { size: 11 } },
-        min: 40,
-        max: 200,
+        min: 40, max: 200,
         ticks: { stepSize: 20, font: { size: 11 } },
         grid: { color: '#f0f0f0' },
       },
@@ -614,8 +651,7 @@ function chartOptions(title) {
         type: 'linear',
         position: 'right',
         title: { display: true, text: '心跳 (bpm)', font: { size: 11 } },
-        min: 30,
-        max: 150,
+        min: 30, max: 150,
         ticks: { stepSize: 15, font: { size: 11 } },
         grid: { display: false },
       },
@@ -627,10 +663,12 @@ function renderWeekChart() {
   const data = prepareChartData(7);
   const ctx = document.getElementById('chart-week').getContext('2d');
   if (weekChart) weekChart.destroy();
-  weekChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels: data.labels, datasets: makeDatasets(data) },
-    options: chartOptions('近一周血压/心跳趋势'),
+  requestAnimationFrame(() => {
+    weekChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: data.labels, datasets: makeDatasets(data) },
+      options: chartOptions('近一周血压/心跳趋势'),
+    });
   });
 }
 
@@ -638,10 +676,12 @@ function renderMonthChart() {
   const data = prepareChartData(30);
   const ctx = document.getElementById('chart-month').getContext('2d');
   if (monthChart) monthChart.destroy();
-  monthChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels: data.labels, datasets: makeDatasets(data) },
-    options: chartOptions('近一月血压/心跳趋势'),
+  requestAnimationFrame(() => {
+    monthChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: data.labels, datasets: makeDatasets(data) },
+      options: chartOptions('近一月血压/心跳趋势'),
+    });
   });
 }
 
@@ -654,7 +694,6 @@ function renderHistory() {
   }
 
   const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || b.period.localeCompare(a.period));
-
   let html = `<table><thead><tr>
     <th>日期</th><th>时段</th><th>收缩压</th><th>舒张压</th><th>心跳</th><th>操作</th>
   </tr></thead><tbody>`;
@@ -662,8 +701,6 @@ function renderHistory() {
   for (const r of sorted) {
     const periodLabel = r.period === 'morning' ? '早上' : '晚上';
     const badgeClass = r.period === 'morning' ? 'badge-morning' : 'badge-evening';
-
-    // Highlight high BP
     const sysClass = r.systolic >= 140 ? 'bp-high' : 'bp-normal';
     const diaClass = r.diastolic >= 90 ? 'bp-high' : 'bp-normal';
 
@@ -702,31 +739,31 @@ document.getElementById('btn-import').addEventListener('click', () => {
   document.getElementById('import-file').click();
 });
 
-document.getElementById('import-file').addEventListener('change', (e) => {
+document.getElementById('import-file').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const imported = JSON.parse(reader.result);
       if (!Array.isArray(imported)) throw new Error('格式错误');
-      const existingIds = new Set(records.map(r => r.id));
-      let added = 0;
-      for (const r of imported) {
-        if (!r.id || !existingIds.has(r.id)) {
-          records.push({ ...r, id: r.id || crypto.randomUUID() });
-          added++;
-        }
-      }
-      saveRecords(records);
-      refreshAll();
-      showToast(`导入了 ${added} 条新记录`);
-    } catch {
-      showToast('文件格式错误，请选择正确的 JSON 备份文件');
+      await importRecords(imported);
+      await reloadFromCloud();
+      cacheLocal();
+      showToast(`已导入 ${imported.length} 条记录`);
+    } catch (err) {
+      console.error('导入失败:', err);
+      showToast('导入失败: ' + err.message);
     }
   };
   reader.readAsText(file);
   e.target.value = '';
+});
+
+document.getElementById('btn-refresh').addEventListener('click', async () => {
+  await reloadFromCloud();
+  cacheLocal();
+  showToast('数据已刷新');
 });
 
 // ============ Tabs ============
@@ -737,7 +774,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.add('active');
     document.getElementById(btn.dataset.tab).classList.add('active');
 
-    // Render chart on tab switch if needed
     if (btn.dataset.tab === 'tab-week') {
       setTimeout(renderWeekChart, 100);
     } else if (btn.dataset.tab === 'tab-month') {
@@ -757,34 +793,12 @@ function refreshAll() {
 }
 
 // ============ Init ============
-renderWeekChart();
-renderHistory();
-
-// ============ Demo data helper (uncomment to inject sample data) ============
-// function injectDemoData() {
-//   const base = new Date();
-//   const data = [];
-//   for (let i = 29; i >= 0; i--) {
-//     const d = new Date(base);
-//     d.setDate(d.getDate() - i);
-//     const dateStr = d.toISOString().split('T')[0];
-//     data.push({
-//       id: crypto.randomUUID(), date: dateStr, period: 'morning',
-//       systolic: 118 + Math.round(Math.random() * 20 - 10),
-//       diastolic: 75 + Math.round(Math.random() * 12 - 6),
-//       heartRate: 70 + Math.round(Math.random() * 14 - 7)
-//     });
-//     data.push({
-//       id: crypto.randomUUID(), date: dateStr, period: 'evening',
-//       systolic: 122 + Math.round(Math.random() * 18 - 9),
-//       diastolic: 78 + Math.round(Math.random() * 10 - 5),
-//       heartRate: 72 + Math.round(Math.random() * 12 - 6)
-//     });
-//   }
-//   records = data;
-//   saveRecords(records);
-//   refreshAll();
-// }
+(async function init() {
+  await reloadFromCloud();
+  cacheLocal();
+  renderWeekChart();
+  renderHistory();
+})();
 </script>
 
 </body>
