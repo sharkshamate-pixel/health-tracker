@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>血压心跳记录追踪器</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f8;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --sub: #7f8c8d;
+    --border: #e8e8ec;
+    --primary: #3498db;
+    --danger: #e74c3c;
+    --morning: #f39c12;
+    --evening: #2c3e50;
+    --sys-morning: #ff6b6b;
+    --sys-evening: #3498db;
+    --dia-morning: #ff6b6b88;
+    --dia-evening: #3498db88;
+    --hr-morning: #2ecc71;
+    --hr-evening: #9b59b6;
+    --radius: 12px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 16px;
+  }
+  .container { max-width: 700px; margin: 0 auto; }
+
+  /* Header */
+  header {
+    text-align: center;
+    padding: 20px 0 16px;
+  }
+  header h1 { font-size: 1.5rem; font-weight: 700; }
+  header p { color: var(--sub); font-size: 0.9rem; margin-top: 2px; }
+
+  /* Card */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 1.05rem;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h2 .icon { font-size: 1.2rem; }
+
+  /* Form */
+  .form-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 90px;
+  }
+  .form-group label {
+    font-size: 0.78rem;
+    color: var(--sub);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .form-group input, .form-group select {
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #fafafa;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: #fff;
+  }
+  .btn {
+    padding: 11px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-outline { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
+  .btn-outline:hover { background: #f0f7ff; }
+  .btn-danger { background: none; color: var(--danger); border: 1.5px solid var(--danger); }
+  .btn-danger:hover { background: #fff5f5; }
+  .btn-sm { padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; }
+
+  .form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 0;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px 0;
+    border: none;
+    background: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--sub);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+  }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Chart wrapper */
+  .chart-wrapper {
+    position: relative;
+    width: 100%;
+    max-height: 360px;
+    margin-top: 12px;
+  }
+  .chart-wrapper canvas { width: 100% !important; }
+
+  /* Legend info */
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    color: var(--sub);
+    margin-top: 8px;
+  }
+  .chart-legend span { display: flex; align-items: center; gap: 4px; }
+  .chart-legend .dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  th, td {
+    padding: 10px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  th { font-size: 0.75rem; color: var(--sub); font-weight: 600; text-transform: uppercase; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .badge-morning { background: #fef3cd; color: #856404; }
+  .badge-evening { background: #d6d8d9; color: #383d41; }
+  .bp-high { color: var(--danger); font-weight: 700; }
+  .bp-normal { color: #27ae60; }
+
+  .table-actions { display: flex; gap: 4px; justify-content: center; }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 40px 20px; color: var(--sub); }
+  .empty .icon { font-size: 2.5rem; margin-bottom: 8px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2c3e50;
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 480px) {
+    body { padding: 8px; }
+    .card { padding: 14px; }
+    .form-row { gap: 6px; }
+    .form-group { min-width: 70px; }
+    .form-group input, .form-group select { padding: 8px; font-size: 0.9rem; }
+    th, td { padding: 6px 4px; font-size: 0.78rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🩺 根根血压心跳记录器</h1>
+    <p>记录早晚血压/心跳 · 趋势一目了然</p>
+  </header>
+
+  <!-- Entry Form -->
+  <div class="card" id="form-card">
+    <h2><span class="icon">📝</span> 录入数据</h2>
+    <form id="record-form" autocomplete="off">
+      <div class="form-row">
+        <div class="form-group">
+          <label>日期</label>
+          <input type="date" id="input-date" required>
+        </div>
+        <div class="form-group">
+          <label>时段</label>
+          <select id="input-period" required>
+            <option value="morning">🌅 早上</option>
+            <option value="evening">🌙 晚上</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>收缩压 (mmHg)</label>
+          <input type="number" id="input-systolic" placeholder="120" min="60" max="250" required>
+        </div>
+        <div class="form-group">
+          <label>舒张压 (mmHg)</label>
+          <input type="number" id="input-diastolic" placeholder="80" min="30" max="150" required>
+        </div>
+        <div class="form-group">
+          <label>心跳 (bpm)</label>
+          <input type="number" id="input-heartrate" placeholder="72" min="30" max="200" required>
+        </div>
+      </div>
+      <input type="hidden" id="input-edit-id">
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline btn-sm" id="btn-cancel-edit" style="display:none">取消编辑</button>
+        <button type="submit" class="btn btn-primary" id="btn-submit">💾 保存记录</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Charts -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="tab-week">📊 一周趋势</button>
+      <button class="tab-btn" data-tab="tab-month">📈 一月趋势</button>
+      <button class="tab-btn" data-tab="tab-list">📋 历史记录</button>
+    </div>
+
+    <!-- Week Chart -->
+    <div class="tab-content active" id="tab-week">
+      <div class="chart-wrapper"><canvas id="chart-week"></canvas></div>
+      <div class="chart-legend">
+        <span><span class="dot" style="background:#ff6b6b"></span> 收缩压(早)</span>
+        <span><span class="dot" style="background:#3498db"></span> 收缩压(晚)</span>
+        <span><span class="dot" style="background:transparent;border:2px dashed #ff6b6b88"></span> 舒张压(早)</span>
+        <span><span class="dot" style="background:transparent;border:2px dashed #3498db88"></span> 舒张压(晚)</span>
+        <span><span class="dot" style="background:#2ecc71"></span> 心跳(早)</span>
+        <span><span class="dot" style="background:#9b59b6"></span> 心跳(晚)</span>
+      </div>
+    </div>
+
+    <!-- Month Chart -->
+    <div class="tab-content" id="tab-month">
+      <div class="chart-wrapper"><canvas id="chart-month"></canvas></div>
+      <div class="chart-legend">
+        <span><span class="dot" style="background:#ff6b6b"></span> 收缩压(早)</span>
+        <span><span class="dot" style="background:#3498db"></span> 收缩压(晚)</span>
+        <span><span class="dot" style="background:transparent;border:2px dashed #ff6b6b88"></span> 舒张压(早)</span>
+        <span><span class="dot" style="background:transparent;border:2px dashed #3498db88"></span> 舒张压(晚)</span>
+        <span><span class="dot" style="background:#2ecc71"></span> 心跳(早)</span>
+        <span><span class="dot" style="background:#9b59b6"></span> 心跳(晚)</span>
+      </div>
+    </div>
+
+    <!-- History List -->
+    <div class="tab-content" id="tab-list">
+      <div class="toolbar">
+        <button class="btn btn-outline btn-sm" id="btn-export">📥 导出备份</button>
+        <button class="btn btn-outline btn-sm" id="btn-import">📤 导入数据</button>
+        <input type="file" id="import-file" accept=".json" style="display:none">
+      </div>
+      <div id="history-table"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ Storage ============
+const STORAGE_KEY = 'health-tracker-records';
+
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveRecords(records) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+// ============ State ============
+let records = loadRecords();
+let weekChart = null;
+let monthChart = null;
+
+// ============ DOM refs ============
+const form = document.getElementById('record-form');
+const inputDate = document.getElementById('input-date');
+const inputPeriod = document.getElementById('input-period');
+const inputSystolic = document.getElementById('input-systolic');
+const inputDiastolic = document.getElementById('input-diastolic');
+const inputHeartRate = document.getElementById('input-heartrate');
+const inputEditId = document.getElementById('input-edit-id');
+const btnSubmit = document.getElementById('btn-submit');
+const btnCancelEdit = document.getElementById('btn-cancel-edit');
+const toast = document.getElementById('toast');
+
+// Set today as default
+inputDate.value = new Date().toISOString().split('T')[0];
+
+// ============ Toast ============
+let toastTimer;
+function showToast(msg) {
+  clearTimeout(toastTimer);
+  toast.textContent = msg;
+  toast.classList.add('show');
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ============ Form handlers ============
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const date = inputDate.value;
+  const period = inputPeriod.value;
+  const systolic = parseInt(inputSystolic.value);
+  const diastolic = parseInt(inputDiastolic.value);
+  const heartRate = parseInt(inputHeartRate.value);
+
+  if (!date || isNaN(systolic) || isNaN(diastolic) || isNaN(heartRate)) {
+    showToast('请填写完整的数据');
+    return;
+  }
+
+  const editId = inputEditId.value;
+  if (editId) {
+    // Update existing
+    const idx = records.findIndex(r => r.id === editId);
+    if (idx !== -1) {
+      records[idx] = { ...records[idx], date, period, systolic, diastolic, heartRate };
+    }
+    inputEditId.value = '';
+    btnSubmit.textContent = '💾 保存记录';
+    btnCancelEdit.style.display = 'none';
+    showToast('记录已更新');
+  } else {
+    // Add new
+    records.push({
+      id: crypto.randomUUID(),
+      date,
+      period,
+      systolic,
+      diastolic,
+      heartRate,
+      timestamp: Date.now()
+    });
+    showToast('记录已保存');
+  }
+
+  saveRecords(records);
+  resetForm();
+  refreshAll();
+});
+
+btnCancelEdit.addEventListener('click', resetForm);
+
+function resetForm() {
+  inputEditId.value = '';
+  inputDate.value = new Date().toISOString().split('T')[0];
+  inputPeriod.value = 'morning';
+  inputSystolic.value = '';
+  inputDiastolic.value = '';
+  inputHeartRate.value = '';
+  btnSubmit.textContent = '💾 保存记录';
+  btnCancelEdit.style.display = 'none';
+}
+
+// ============ Edit / Delete ============
+function editRecord(id) {
+  const r = records.find(r => r.id === id);
+  if (!r) return;
+  inputDate.value = r.date;
+  inputPeriod.value = r.period;
+  inputSystolic.value = r.systolic;
+  inputDiastolic.value = r.diastolic;
+  inputHeartRate.value = r.heartRate;
+  inputEditId.value = r.id;
+  btnSubmit.textContent = '✏️ 更新记录';
+  btnCancelEdit.style.display = 'inline-block';
+  document.getElementById('form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteRecord(id) {
+  if (!confirm('确定删除这条记录吗？')) return;
+  records = records.filter(r => r.id !== id);
+  saveRecords(records);
+  refreshAll();
+  showToast('记录已删除');
+}
+
+// ============ Charts ============
+function prepareChartData(days) {
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - days + 1);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  const filtered = records
+    .filter(r => r.date >= cutoffStr && r.date <= now.toISOString().split('T')[0])
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Group by date
+  const byDate = {};
+  for (const r of filtered) {
+    if (!byDate[r.date]) byDate[r.date] = {};
+    byDate[r.date][r.period] = r;
+  }
+
+  const allDates = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(cutoff);
+    d.setDate(d.getDate() + i);
+    allDates.push(d.toISOString().split('T')[0]);
+  }
+
+  const labels = allDates.map(d => {
+    const dt = new Date(d + 'T00:00:00');
+    return `${dt.getMonth() + 1}/${dt.getDate()}`;
+  });
+
+  const sysMorning = [];
+  const sysEvening = [];
+  const diaMorning = [];
+  const diaEvening = [];
+  const hrMorning = [];
+  const hrEvening = [];
+
+  for (const date of allDates) {
+    const day = byDate[date] || {};
+    const m = day.morning;
+    const e = day.evening;
+
+    sysMorning.push(m ? m.systolic : null);
+    diaMorning.push(m ? m.diastolic : null);
+    hrMorning.push(m ? m.heartRate : null);
+
+    sysEvening.push(e ? e.systolic : null);
+    diaEvening.push(e ? e.diastolic : null);
+    hrEvening.push(e ? e.heartRate : null);
+  }
+
+  return { labels, sysMorning, sysEvening, diaMorning, diaEvening, hrMorning, hrEvening };
+}
+
+function makeDatasets(data) {
+  return [
+    {
+      label: '收缩压(早)',
+      data: data.sysMorning,
+      borderColor: '#ff6b6b',
+      backgroundColor: '#ff6b6b',
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      yAxisID: 'y',
+    },
+    {
+      label: '收缩压(晚)',
+      data: data.sysEvening,
+      borderColor: '#3498db',
+      backgroundColor: '#3498db',
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      yAxisID: 'y',
+    },
+    {
+      label: '舒张压(早)',
+      data: data.diaMorning,
+      borderColor: '#ff6b6b88',
+      backgroundColor: '#ff6b6b88',
+      borderDash: [5, 3],
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      yAxisID: 'y',
+    },
+    {
+      label: '舒张压(晚)',
+      data: data.diaEvening,
+      borderColor: '#3498db88',
+      backgroundColor: '#3498db88',
+      borderDash: [5, 3],
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      yAxisID: 'y',
+    },
+    {
+      label: '心跳(早)',
+      data: data.hrMorning,
+      borderColor: '#2ecc71',
+      backgroundColor: '#2ecc71',
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      yAxisID: 'y1',
+    },
+    {
+      label: '心跳(晚)',
+      data: data.hrEvening,
+      borderColor: '#9b59b6',
+      backgroundColor: '#9b59b6',
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      yAxisID: 'y1',
+    },
+  ];
+}
+
+function chartOptions(title) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      title: { display: true, text: title, font: { size: 14 }, padding: { bottom: 16 }, color: '#2c3e50' },
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label(ctx) {
+            const unit = ctx.dataset.label.includes('心跳') ? 'bpm' : 'mmHg';
+            return `${ctx.dataset.label}: ${ctx.parsed.y ?? '无数据'} ${unit}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+      y: {
+        type: 'linear',
+        position: 'left',
+        title: { display: true, text: '血压 (mmHg)', font: { size: 11 } },
+        min: 40,
+        max: 200,
+        ticks: { stepSize: 20, font: { size: 11 } },
+        grid: { color: '#f0f0f0' },
+      },
+      y1: {
+        type: 'linear',
+        position: 'right',
+        title: { display: true, text: '心跳 (bpm)', font: { size: 11 } },
+        min: 30,
+        max: 150,
+        ticks: { stepSize: 15, font: { size: 11 } },
+        grid: { display: false },
+      },
+    },
+  };
+}
+
+function renderWeekChart() {
+  const data = prepareChartData(7);
+  const ctx = document.getElementById('chart-week').getContext('2d');
+  if (weekChart) weekChart.destroy();
+  weekChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: data.labels, datasets: makeDatasets(data) },
+    options: chartOptions('近一周血压/心跳趋势'),
+  });
+}
+
+function renderMonthChart() {
+  const data = prepareChartData(30);
+  const ctx = document.getElementById('chart-month').getContext('2d');
+  if (monthChart) monthChart.destroy();
+  monthChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: data.labels, datasets: makeDatasets(data) },
+    options: chartOptions('近一月血压/心跳趋势'),
+  });
+}
+
+// ============ History Table ============
+function renderHistory() {
+  const container = document.getElementById('history-table');
+  if (records.length === 0) {
+    container.innerHTML = '<div class="empty"><div class="icon">📭</div><p>暂无记录，请先录入数据</p></div>';
+    return;
+  }
+
+  const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || b.period.localeCompare(a.period));
+
+  let html = `<table><thead><tr>
+    <th>日期</th><th>时段</th><th>收缩压</th><th>舒张压</th><th>心跳</th><th>操作</th>
+  </tr></thead><tbody>`;
+
+  for (const r of sorted) {
+    const periodLabel = r.period === 'morning' ? '早上' : '晚上';
+    const badgeClass = r.period === 'morning' ? 'badge-morning' : 'badge-evening';
+
+    // Highlight high BP
+    const sysClass = r.systolic >= 140 ? 'bp-high' : 'bp-normal';
+    const diaClass = r.diastolic >= 90 ? 'bp-high' : 'bp-normal';
+
+    html += `<tr>
+      <td>${r.date}</td>
+      <td><span class="badge ${badgeClass}">${periodLabel}</span></td>
+      <td class="${sysClass}">${r.systolic}</td>
+      <td class="${diaClass}">${r.diastolic}</td>
+      <td>${r.heartRate}</td>
+      <td>
+        <div class="table-actions">
+          <button class="btn btn-outline btn-sm" onclick="editRecord('${r.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRecord('${r.id}')">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ============ Import / Export ============
+document.getElementById('btn-export').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `health-records-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('数据已导出');
+});
+
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+
+document.getElementById('import-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported)) throw new Error('格式错误');
+      const existingIds = new Set(records.map(r => r.id));
+      let added = 0;
+      for (const r of imported) {
+        if (!r.id || !existingIds.has(r.id)) {
+          records.push({ ...r, id: r.id || crypto.randomUUID() });
+          added++;
+        }
+      }
+      saveRecords(records);
+      refreshAll();
+      showToast(`导入了 ${added} 条新记录`);
+    } catch {
+      showToast('文件格式错误，请选择正确的 JSON 备份文件');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ============ Tabs ============
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+
+    // Render chart on tab switch if needed
+    if (btn.dataset.tab === 'tab-week') {
+      setTimeout(renderWeekChart, 100);
+    } else if (btn.dataset.tab === 'tab-month') {
+      setTimeout(renderMonthChart, 100);
+    }
+  });
+});
+
+// ============ Refresh all ============
+function refreshAll() {
+  renderHistory();
+  const activeTab = document.querySelector('.tab-content.active');
+  if (activeTab) {
+    if (activeTab.id === 'tab-week') renderWeekChart();
+    else if (activeTab.id === 'tab-month') renderMonthChart();
+  }
+}
+
+// ============ Init ============
+renderWeekChart();
+renderHistory();
+
+// ============ Demo data helper (uncomment to inject sample data) ============
+// function injectDemoData() {
+//   const base = new Date();
+//   const data = [];
+//   for (let i = 29; i >= 0; i--) {
+//     const d = new Date(base);
+//     d.setDate(d.getDate() - i);
+//     const dateStr = d.toISOString().split('T')[0];
+//     data.push({
+//       id: crypto.randomUUID(), date: dateStr, period: 'morning',
+//       systolic: 118 + Math.round(Math.random() * 20 - 10),
+//       diastolic: 75 + Math.round(Math.random() * 12 - 6),
+//       heartRate: 70 + Math.round(Math.random() * 14 - 7)
+//     });
+//     data.push({
+//       id: crypto.randomUUID(), date: dateStr, period: 'evening',
+//       systolic: 122 + Math.round(Math.random() * 18 - 9),
+//       diastolic: 78 + Math.round(Math.random() * 10 - 5),
+//       heartRate: 72 + Math.round(Math.random() * 12 - 6)
+//     });
+//   }
+//   records = data;
+//   saveRecords(records);
+//   refreshAll();
+// }
+</script>
+
+</body>
+</html>
